@@ -1,0 +1,80 @@
+# Comprehensive Step-by-Step Guide for Setting Up PostgreSQL with Docker and Loading Data
+
+## 1. Clone the Repository
+- Open Git Bash and navigate to your desired project directory.
+- Clone the repository:
+  ```bash
+  git clone https://github.com/DataExpert-io/data-engineer-handbook.git
+  ```
+- Navigate to the specific directory:
+  ```bash
+  cd data-engineer-handbook/bootcamp/materials/1-dimensional-data-modeling
+  ```
+
+## 2. Set Up Environment Variables
+- Locate `example.env` in the directory.
+- Copy it to create `.env`:
+  ```bash
+  cp example.env .env
+  ```
+- Edit `.env` to confirm database settings like `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, and `POSTGRES_PORT`.
+
+## 3. Verify Docker Installation
+- Ensure Docker is installed and running.
+- Check the version:
+  ```bash
+  docker --version
+  ```
+
+## 4. Launch the Database Container
+- Start PostgreSQL with:
+  ```bash
+  docker-compose up -d
+  ```
+
+## 5. Connect to PostgreSQL
+- Install a database tool like DBeaver.
+- Configure the connection:
+  - Database Type: PostgreSQL
+  - Host: `localhost`
+  - Port: `5432` (or as set in `.env`)
+  - Username/Password: From `.env`
+
+## 6. Verify Tables
+- Run this query in your database tool:
+  ```sql
+  SELECT table_name 
+  FROM information_schema.tables 
+  WHERE table_schema = 'public';
+  ```
+
+## 7. Troubleshoot Missing Tables
+- Check container logs:
+  ```bash
+  docker-compose logs
+  ```
+- Look for errors like missing `data.dump` or `init-db.sh`.
+
+## 8. Load Data into PostgreSQL
+- For a SQL dump:
+  ```bash
+  docker exec -it my-postgres-container bash
+  psql -U $POSTGRES_USER -d $POSTGRES_DB < /docker-entrypoint-initdb.d/data.dump
+  ```
+- For a Binary dump:
+  ```bash
+  pg_restore -U $POSTGRES_USER -d $POSTGRES_DB /docker-entrypoint-initdb.d/data.dump
+  ```
+
+## 9. Recheck Tables
+- Refresh the database in DBeaver.
+- Verify tables:
+  ```sql
+  SELECT table_name 
+  FROM information_schema.tables 
+  WHERE table_schema = 'public';
+  ```
+
+### Key Issues Encountered
+- **Error: "toc.dat actor text"**: Fixed by using `pg_restore` for binary dumps.
+- **Missing Data**: Manually loaded data using `psql` or `pg_restore` after analyzing logs.
