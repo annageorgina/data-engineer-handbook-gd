@@ -148,7 +148,7 @@ SELECT
 		is_active,
 		LAG(scoring_class, 1) OVER (PARTITION BY player_name ORDER BY current_season) as previous_scoring_class,
 		LAG(is_active, 1) OVER (PARTITION BY player_name ORDER BY current_season) as previous_is_active
-FROM players
+FROM players;
 
 -- creating indicator that it chnaged with CTE 
 
@@ -172,7 +172,7 @@ WITH with_previous AS (
 					ELSE 0
 				END AS is_active_change_indicator
 		 FROM with_previous
-)
+);
 
 
 -- combining the change indicators into one change_indicator
@@ -212,7 +212,7 @@ SELECT player_name,
 	   2021 AS current_season
  FROM with_streaks
 GROUP BY player_name, streak_identifier, is_active, scoring_class
-ORDER BY player_name, streak_identifier
+ORDER BY player_name, streak_identifier;
 
 -- expensive parts of the abover query 
  -- partititons & window functions on entire dataset 
@@ -229,25 +229,31 @@ CREATE TYPE scd_type AS (
 	is_active BOOLEAN, 
 	start_season INTEGER,
 	end_season INTEGER
-)
+);
 
+
+-- incrementally making the scd compacted 
 WITH 
 	last_season_scd AS (
 		SELECT * 
-		 FROM players_scd 
+		  FROM players_scd 
 		 WHERE current_season = 2021
-		 AND end_season = 2021
+		   AND end_season = 2021
 	),
 	historical_scd AS ( 			-- this does not change moving forwards because its all in the past! 
-		SELECT * 
-		FROM players_scd
-		WHERE current_season = 2021
-		 AND end_season < 2021
+		SELECT player_name, 
+			   scoring_class,
+			   is_active,
+			   start_season, 
+			   end_season
+		  FROM players_scd
+		 WHERE current_season = 2021
+		   AND end_season < 2021
 	),
 	this_season_scd AS (
 		SELECT * 
-		 FROM players 				-- players not players_scd!! 
-		WHERE current_season = 2022
+		  FROM players 				-- players not players_scd!! 
+		 WHERE current_season = 2022
 	),
 	unchanged_records AS (
 		SELECT ts.player_name, 
@@ -281,7 +287,7 @@ WITH
 		 LEFT JOIN last_season_scd AS ls
 		  	  ON ls.player_name = ts.player_name 
 		WHERE (ts.scoring_class <> ls.scoring_class  -- changed records
-		  OR ts.is_active <> ls.is_active) 
+		   OR ts.is_active <> ls.is_active) 
 	),
 	unnested_changed_records AS (
 		SELECT player_name, 
@@ -289,19 +295,36 @@ WITH
 			   (records::scd_type).is_active,
 			   (records::scd_type).start_season,
 			   (records::scd_type).end_season
-	    FROM changed_records
-	)
-	SELECT * FROM unnested_changed_records
-	
+	      FROM changed_records
+	),
+	new_records AS (
+		SELECT ts.player_name, 
+			   ts.scoring_class,
+			   ts.is_active,
+			   ts.current_season AS start_season,
+			   ls.end_season AS end_season
+		  FROM this_season_scd AS ts
+		  LEFT JOIN last_season_scd AS ls 
+		 	   ON ts.player_name = ls.player_name 
+		 WHERE ls.player_name IS NULL 
 
-	SELECT ts.player_name, 
-		   ts.scoring_class,
-		   ts.is_active,
-		   ls.scoring_class,
-		   ls.is_active
-	 FROM this_season_scd AS ts
-	 LEFT JOIN last_season_scd AS ls
-	  	  ON ls.player_name = ts.player_name
+	)
+
+	SELECT * 
+	  FROM historical_scd
+	 UNION ALL 
+	SELECT *
+	  FROM unchanged_records
+	 UNION ALL
+	SELECT *
+      FROM unnested_changed_records
+	UNION ALL 
+	SELECT *
+      FROM new_records;
+
+-- Note: need to think about the assumptions 
+-- e.g. scoring class or is_active are never NULL this awould affect the WHERE statements
+-- This depends on Yesterday data 2021 to be able to backfill currently (2022)
 
 	   
 
